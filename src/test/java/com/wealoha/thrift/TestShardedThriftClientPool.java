@@ -32,13 +32,13 @@ public class TestShardedThriftClientPool {
                 new ServiceInfo("127.0.0.1", 9090), //
                 new ServiceInfo("127.0.0.1", 9091), //
                 new ServiceInfo("127.0.0.1", 9092));
-        ShardedThriftClientPool<Integer, Client> shardedPool = new ShardedThriftClientPool<>(
+        ShardedThriftClientPool<Long, Client> shardedPool = new ShardedThriftClientPool<>(
                 serviceList, //
                 key -> key, //
                 servers -> new ThriftClientPool<>(servers, transport -> new Client(
                         new TBinaryProtocol(new TFramedTransport(transport))), config));
 
-        Integer key = 10;
+        Long key = 10L;
         ThriftClientPool<Client> pool = shardedPool.getShardedPool(key);
         Assert.assertEquals(Arrays.asList(new ServiceInfo("127.0.0.1", 9091)), pool.getServices());
     }
@@ -56,7 +56,7 @@ public class TestShardedThriftClientPool {
                 new ServiceInfo("127.0.0.1", 9093), //
                 new ServiceInfo("127.0.0.1", 9094));
 
-        ShardedThriftClientPool<Integer, Client> shardedPool = new ShardedThriftClientPool<>(
+        ShardedThriftClientPool<Long, Client> shardedPool = new ShardedThriftClientPool<>(
                 serviceList, //
                 key -> key, //
                 servers -> {
@@ -68,13 +68,13 @@ public class TestShardedThriftClientPool {
                 servers -> new ThriftClientPool<>(servers, transport -> new Client(
                         new TBinaryProtocol(new TFramedTransport(transport))), config));
 
-        Integer key = 10;
+        Long key = 10L;
         ThriftClientPool<Client> pool = shardedPool.getShardedPool(key);
         Assert.assertEquals(Arrays.asList(new ServiceInfo("127.0.0.1", 9092), //
                 new ServiceInfo("127.0.0.1", 9093)), //
                 pool.getServices());
 
-        key = 8;
+        key = 8L;
         pool = shardedPool.getShardedPool(key);
         Assert.assertEquals(Arrays.asList(new ServiceInfo("127.0.0.1", 9094)), //
                 pool.getServices());

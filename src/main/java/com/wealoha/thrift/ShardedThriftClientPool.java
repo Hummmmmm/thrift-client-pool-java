@@ -1,5 +1,6 @@
 package com.wealoha.thrift;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +35,7 @@ public class ShardedThriftClientPool<K, T extends TServiceClient> {
 
     private List<ServiceInfo> serviceList;
 
-    private final Function<K, Integer> hashFunction;
+    private final Function<K, Long> hashFunction;
 
     private final Function<List<ServiceInfo>, List<List<ServiceInfo>>> partitionFunction;
 
@@ -53,7 +54,7 @@ public class ShardedThriftClientPool<K, T extends TServiceClient> {
      * @param clientPoolFunction
      */
     public ShardedThriftClientPool(List<ServiceInfo> serviceList,
-            Function<K, Integer> hashFunction,
+            Function<K, Long> hashFunction,
             Function<List<ServiceInfo>, List<List<ServiceInfo>>> partitionFunction,
             Function<List<ServiceInfo>, ThriftClientPool<T>> clientPoolFunction) {
 
@@ -73,7 +74,7 @@ public class ShardedThriftClientPool<K, T extends TServiceClient> {
      * @param clientPoolFunction
      */
     public ShardedThriftClientPool(List<ServiceInfo> serviceList,
-            Function<K, Integer> hashFunction,
+            Function<K, Long> hashFunction,
             Function<List<ServiceInfo>, ThriftClientPool<T>> clientPoolFunction) {
         this(serviceList, hashFunction, servers -> servers.stream()
                 .map(server -> Collections.singletonList(server)).collect(Collectors.toList()),
@@ -92,12 +93,53 @@ public class ShardedThriftClientPool<K, T extends TServiceClient> {
         }
     }
 
+    static BigDecimal MAX_HASH = new BigDecimal(Long.MAX_VALUE).add(new BigDecimal(Long.MAX_VALUE)).add(new BigDecimal(1));
+    static long MAX_HASH2 = -1;
+
+    public static int findServerPartitionIndex(BigDecimal hash, int bucketSize) {
+
+        BigDecimal divideSize = MAX_HASH.divide(new BigDecimal(bucketSize), BigDecimal.ROUND_DOWN);
+        if (hash.max(divideSize.multiply(new BigDecimal(bucketSize))).equals(hash)) {
+            return bucketSize;
+        } else {
+            return hash.divide(divideSize, BigDecimal.ROUND_DOWN).intValue() + 1;
+        }
+    }
+
+    public static int findServerPartitionIndex2(long hash, int bucketSize) {
+
+        long divideSize = Long.divideUnsigned(MAX_HASH2, bucketSize);
+        long upBound = divideSize * bucketSize;
+        if (Long.compareUnsigned(hash, upBound) >= 0L) {
+            return bucketSize;
+        } else {
+            return (int) Long.divideUnsigned(hash, divideSize) + 1;
+        }
+    }
+
+
+    public static void main(String[] args) {
+        /*System.out.println(BigDecimal.valueOf(10).max(BigDecimal.valueOf(12)));
+        BigDecimal b1 = BigDecimal.valueOf(10);
+        BigDecimal b2 = BigDecimal.valueOf(12);
+        System.out.println(b1.min(b2).equals(b1));*/
+
+        System.out.println(findServerPartitionIndex(MAX_HASH, 2048));
+        System.out.println(findServerPartitionIndex2(-1, 2048));
+
+        System.out.println(findServerPartitionIndex(BigDecimal.valueOf(100).add(BigDecimal.valueOf(Long.MAX_VALUE)), 2048));
+        System.out.println(findServerPartitionIndex2(100 + Long.MAX_VALUE, 2048));
+    }
+
+
     public ThriftClientPool<T> getShardedPool(K key) throws NoBackendServiceException {
-        int hash = hashFunction.apply(key);
-        int shard = hash % servicePartitions.size();
+        long hash = hashFunction.apply(key);
+        // int shard = hash % servicePartitions.size();
+        // int shard = findServerPartitionIndex(new BigDecimal(hash), servicePartitions.size());
+        int shard = findServerPartitionIndex2(hash, servicePartitions.size());
         logger.debug("getPool by key: hash={}, shard={}/{}", hash, shard, servicePartitions.size());
 
-        List<ServiceInfo> servers = servicePartitions.get(shard);
+        List<ServiceInfo> servers = servicePartitions.get(shard - 1);
         if (servers == null || servers.size() == 0) {
             throw new NoBackendServiceException("no servers mapping for key: " + key);
         }
